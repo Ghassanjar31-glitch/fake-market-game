@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Fake Market - Pro</title>
+    <!-- استدعاء المكتبات الرسمية لتليجرام والرسوم البيانية -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        :root {
+            --bg-color: #080b11;
+            --panel-color: #111622;
+            --neon-blue: #00f0ff;
+            --neon-green: #39ff14;
+            --neon-purple: #9d00ff;
+            --neon-red: #ff3131;
+            --text-main: #ffffff;
+            --text-muted: #6c7d93;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 10px 10px 70px 10px; /* مساحة بالأسفل من أجل القائمة */
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* اللوحة العلوية للرصيد */
+        .header-crypto {
+            background: linear-gradient(135deg, var(--panel-color) 0%, #171e2e 100%);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            border-radius: 16px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .balance-label { font-size: 12px; color: var(--text-muted); }
+        .balance-value { font-size: 20px; font-weight: 800; color: var(--neon-blue); text-shadow: 0 0 8px rgba(0, 240, 255, 0.4); }
+
+        /* شريط اختيار العملات المتعددة */
+        .crypto-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .crypto-tab {
+            flex: 1;
+            background: var(--panel-color);
+            border: 1px solid #1f2738;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .crypto-tab.active {
+            border-color: var(--neon-purple);
+            background: rgba(157, 0, 255, 0.1);
+            box-shadow: 0 0 10px rgba(157, 0, 255, 0.2);
+        }
+
+        .crypto-tab-name { font-size: 13px; font-weight: bold; }
+        .crypto-tab-price { font-size: 11px; margin-top: 4px; }
+
+        /* الشاشات الرئيسية (Tabs) */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* منطقة التداول والرسم البياني */
+        .main-panel {
+            background: var(--panel-color);
+            border-radius: 16px;
+            padding: 12px;
+            border: 1px solid #1c2436;
+            margin-bottom: 12px;
+        }
+
+        .ticker-info { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 10px; }
+
+        /* أزرار الشراء والبيع الاحترافية */
+        .trade-actions { display: flex; gap: 12px; margin-top: 5px; }
+        .trade-btn {
+            flex: 1;
+            border: none;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 12px;
+            cursor: pointer;
+            color: #fff;
+            transition: transform 0.1s ease;
+        }
+        .trade-btn:active { transform: scale(0.97); }
+        .btn-buy { background: rgba(57, 255, 20, 0.12); border: 2px solid var(--neon-green); box-shadow: 0 0 10px rgba(57, 255, 20, 0.15); }
+        .btn-sell { background: rgba(255, 49, 49, 0.12); border: 2px solid var(--neon-red); box-shadow: 0 0 10px rgba(255, 49, 49, 0.15); }
+
+        /* القائمة السفلية للتنقل (Navigation Bar) */
+        .nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #0d121d;
+            border-top: 1px solid #1f2738;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            z-index: 1000;
+        }
+
+        .nav-item {
+            color: var(--text-muted);
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            background: none;
+            border: none;
+        }
+
+        .nav-item.active {
+            color: var(--neon-blue);
+            text-shadow: 0 0 5px rgba(0, 240, 255, 0.3);
+        }
+
+        .nav-icon { font-size: 20px; }
+
+        /* جداول وقوائم البيانات (للمحفظة والمتصدرين) */
+        .list-container { background: var(--panel-color); border-radius: 16px; padding: 15px; border: 1px solid #1c2436; }
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #1b2232;
+        }
+        .list-item:last-child { border-bottom: none; }
+
+        .up-trend { color: var(--neon-green); }
+        .down-trend { color: var(--neon-red); }
+    </style>
+</head>
+<body>
+
+    <!-- الجزء الثابت العلوي: الرصيد الإجمالي من النجوم -->
+    <div class="header-crypto">
+        <div>
+            <div class="balance-label">رصيد نجوم تليجرام الإجمالي</div>
+            <div class="balance-value" id="global-stars">5,000 ⭐</div>
+        </div>
+        <div style="text-align: left;">
+            <div class="balance-label">الأرباح الافتراضية اليوم</div>
+            <div class="balance-value up-trend" id="global-profit" style="color: var(--neon-green); text-shadow: none;">+0 ⭐</div>
+        </div>
+    </div>
+
+    <!-- ================= شاشة التداول الرئيسية ================= -->
+    <div id="page-trade" class="page active">
+        <!-- شريط اختيار العملات المتعددة -->
+        <div class="crypto-selector">
+            <div class="crypto-tab active" id="tab-CYBER" onclick="switchAsset('CYBER')">
+                <div class="crypto-tab-name">CYBER</div>
+                <div class="crypto-tab-price up-trend" id="ticker-CYBER">120 ⭐</div>
+            </div>
+            <div class="crypto-tab" id="tab-AERO" onclick="switchAsset('AERO')">
+                <div class="crypto-tab-name">AERO</div>
+                <div class="crypto-tab-price up-trend" id="ticker-AERO">450 ⭐</div>
+            </div>
+            <div class="crypto-tab" id="tab-STAR" onclick="switchAsset('STAR')">
+                <div class="crypto-tab-name">STAR</div>
+                <div class="crypto-tab-price down-trend" id="ticker-STAR">85 ⭐</div>
+            </div>
+        </div>
+
+        <!-- لوحة الرسم البياني للعملة المحددة -->
+        <div class="main-panel">
+            <div class="ticker-info">
+                <span id="active-asset-title" style="font-weight: bold; color: var(--neon-blue);">تداول العملة: CYBER/STARS</span>
+                <span id="active-asset-price" class="up-trend" style="font-weight: bold;">120 ⭐ (+1.2%)</span>
+            </div>
+            <div id="crypto-chart"></div>
+        </div>
+
+        <!-- أزرار تنفيذ العمليات التداولية الفورية -->
+        <div class="trade-actions">
+            <button class="trade-btn btn-buy" onclick="tradeAction('BUY')">شراء (BUY)</button>
+            <button class="trade-btn btn-sell" onclick="tradeAction('SELL')">بيع (SELL)</button>
+        </div>
+    </div>
+
+
+    <!-- ================= شاشة المحفظة الاستثمارية ================= -->
+    <div id="page-portfolio" class="page">
+        <h3 style="margin: 10px 5px; color: var(--neon-blue);">💼 محفظتك الرقمية</h3>
+        <div class="list-container">
+            <div class="list-item">
+                <div><strong>عملة CYBER Token</strong><br><span class="balance-label">سعر السوق الحالي</span></div>
+                <div style="text-align: left;"><span id="port-owned-CYBER">0.000</span> <span style="color:var(--neon-purple)">CYBER</span><br><span id="port-val-CYBER" class="balance-label">0 ⭐</span></div>
+            </div>
+            <div class="list-item">
+                <div><strong>عملة AERO Coin</strong><br><span class="balance-label">سعر السوق الحالي</span></div>
+                <div style="text-align: left;"><span id="port-owned-AERO">0.000</span> <span style="color:var(--neon-purple)">AERO</span><br><span id="port-val-AERO" class="balance-label">0 ⭐</span></div>
+            </div>
+            <div class="list-item">
+                <div><strong>عملة STAR Asset</strong><br><span class="balance-label">سعر السوق الحالي</span></div>
+                <div style="text-align: left;"><span id="port-owned-STAR">0.000</span> <span style="color:var(--neon-purple)">STAR</span><br><span id="port-val-STAR" class="balance-label">0 ⭐</span></div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ================= شاشة المتصدرين والبطولات ================= -->
+    <div id="page-leaderboard" class="page">
+        <h3 style="margin: 10px 5px; color: var(--neon-blue);">🏆 المتصدرين حول العالم</h3>
+        <div class="list-container">
+            <div class="list-item">
+                <div><span style="color: gold; font-weight: bold; font-size: 16px;">🥇 1.</span> Ghassan_PS</div>
+                <div style="font-weight: bold; color: var(--neon-green);">+85,400 ⭐</div>
+            </div>
+            <div class="list-item">
+                <div><span style="color: silver; font-weight: bold; font-size: 15px;">🥈 2.</span> Merking_01</div>
+                <div>+64,120 ⭐</div>
+            </div>
+            <div class="list-item">
+                <div><span style="color: #cd7f32; font-weight: bold; font-size: 14px;">🥉 3.</span> Wickian_Dev</div>
+                <div>+52,900 ⭐</div>
+            </div>
+            <div class="list-item">
+                <div><span class="balance-label">4.</span> Anet_Crypto</div>
+                <div>+41,200 ⭐</div>
+            </div>
+            <div class="list-item" style="border-top: 2px dashed #1f2738; margin-top: 10px; padding-top: 15px;">
+                <div><span style="color: var(--neon-blue);">#42 (أنت)</span> حاسوبك الافتراضي</div>
+                <div id="user-rank-profit" style="color: var(--neon-green);">+0 ⭐</div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ================= شريط التنقل السفلي الثابت ================= -->
+    <div class="nav-bar">
+        <button class="nav-item active" id="nav-trade" onclick="navigateTo('trade')">
+            <span class="nav-icon">📈</span><span>التداول</span>
+        </button>
+        <button class="nav-item" id="nav-portfolio" onclick="navigateTo('portfolio')">
+            <span class="nav-icon">💼</span><span>المحفظة</span>
+        </button>
+        <button class="nav-item" id="nav-leaderboard" onclick="navigateTo('leaderboard')">
+            <span class="nav-icon">🏆</span><span>المتصدرين</span>
+        </button>
+    </div>
+
+    <script>
+        // تهيئة محرك التليجرام المصغر
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // قاعدة بيانات الحالة المالية والعملات
+        let userStars = 5000;
+        let todayProfit = 0;
+        let activeAsset = 'CYBER';
+
+        // بيانات المحفظة الخاصة بالمستخدم للأصول المشترية
+        let portfolio = { CYBER: 0, AERO: 0, STAR: 0 };
+
+        // بيانات محاكاة السوق للعملات المتعددة
+        let marketData = {
+            CYBER: { price: 120, history: [], lastChange: 0 },
+            AERO: { price: 450, history: [], lastChange: 0 },
+            STAR: { price: 85, history: [], lastChange: 0 }
+        };
+
+        // توليد حركة بيانات أولية عشوائية لكل عملة لتعبئة الرسم البياني
+        const baseTime = new Date().getTime() - 300000;
+        Object.keys(marketData).forEach(coin => {
+            let initialPrice = marketData[coin].price;
+            for(let i=0; i<15; i++) {
+                let open = initialPrice + Math.floor(Math.random() * 20) - 10;
+                let close = open + Math.floor(Math.random() * 20) - 10;
+                let high = Math.max(open, close) + Math.floor(Math.random() * 5);
+                let low = Math.min(open, close) - Math.floor(Math.random() * 5);
+                marketData[coin].history.push({x: baseTime + (i * 20000), y: [open, high, low, close]});
+                initialPrice = close;
+            }
+            marketData[coin].price = initialPrice;
+        });
+
+        // بناء وضبط الرسم البياني التفاعلي
+        const chartOptions = {
+            series: [{ data: marketData['CYBER'].history }],
+            chart: { type: 'candlestick', height: 240, toolbar: { show: false }, animations: { enabled: false } },
+            xaxis: { type: 'datetime', labels: { show: false } },
+            yaxis: { tooltip: { enabled: false }, labels: { style: { colors: '#6c7d93' } } },
+            grid: { borderColor: '#171e2e' }
+        };
+        const mainChart = new ApexCharts(document.querySelector("#crypto-chart"), chartOptions);
+        mainChart.render();
+
+        // المحرك الحي لتحديث الأسواق المتعددة بشكل عشوائي ومستمر (كل ثانية)
+        setInterval(() => {
+            Object.keys(marketData).forEach(coin => {
+                let coinObj = marketData[coin];
+                let lastBar = coinObj.history[coinObj.history.length - 1];
+                let open = lastBar.y[3];
+                let factor = coin === 'AERO' ? 8 : 3; // تقلبات أكبر لعملة ايرو
+                let change = Math.floor(Math.random() * (factor * 2)) - factor;
+                let close = open + change;
+                let high = Math.max(open, close) + Math.floor(Math.random() * 2);
+                let low = Math.min(open, close) - Math.floor(Math.random() * 2);
+
+                coinObj.price = close;
+                coinObj.lastChange = (change / open * 100);
+
+                // استبدال النقطة الأقدم بالنقطة السعرية الحالية
+                coinObj.history.shift();
+                coinObj.history.push({x: new Date().getTime(), y: [open, high, low, close]});
+
+                // تحديث الأسعار في شريط الاختيار العلوي
+                const tickerEl = document.getElementById(`ticker-${coin}`);
+                if (tickerEl) {
+                    tickerEl.innerText = `${close} ⭐`;
+                    tickerEl.className = change >= 0 ? 'crypto-tab-price up-trend' : 'crypto-tab-price down-trend';
+                }
+            });
+
+            // تحديث الشاشة الحالية المفتوحة للمستخدم بالبيانات الفورية
+            updateCurrentUIValues();
+        }, 1200);
+
+        // وظيفة تحديث الشاشة بناءً على التغييرات المالية المستمرة
+        function updateCurrentUIValues() {
+            let activeObj = marketData[activeAsset];
+            
+            // تحديث واجهة التداول الرئيسية
+            document.getElementById('active-asset-price').innerText = `${activeObj.price} ⭐ (${activeObj.lastChange >= 0 ? '+' : ''}${activeObj.lastChange.toFixed(2)}%)`;
+            document.getElementById('active-asset-price').className = activeObj.lastChange >= 0 ? 'up-trend' : 'down-trend';
+            
+            if (document.getElementById('page-trade').classList.contains('active')) {
+                mainChart.updateSeries([{ data: activeObj.history }]);
+            }
+
+            // تحديث واجهة المحفظة الاستثمارية بالقيم المالية الفعلية
+            Object.keys(portfolio).forEach(coin => {
+                document.getElementById(`port-owned-${coin}`).innerText = portfolio[coin].toFixed(2);
+                let totalValue = portfolio[coin] * marketData[coin].price;
+                document.getElementById(`port-val-${coin}`).innerText = `${Math.floor(totalValue).toLocaleString()} ⭐`;
+            });
+        }
+
+        // التبديل بين العملات الرقمية المتوفرة
+        function switchAsset(coin) {
+            activeAsset = coin;
+            
+            // إزالة الكلاس النشط وتطبيقه على التاب الجديد
+            document.querySelectorAll('.crypto-tab').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${coin}`).classList.add('active');
+
+            // تغيير العناوين وتحديث الرسم البياني فوراً
+            document.getElementById('active-asset-title').innerText = `تداول العملة: ${coin}/STARS`;
+            mainChart.updateSeries([{ data: marketData[coin].history }]);
+            updateCurrentUIValues();
+
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        }
+
+        // معالجة عمليات الشراء والبيع للأصول
+        function tradeAction(type) {
+            let pricePerUnit = marketData[activeAsset].price;
+
+            if (type === 'BUY') {
+                if (userStars >= pricePerUnit) {
+                    userStars -= pricePerUnit;
+                    portfolio[activeAsset] += 1;
+                    if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+                } else {
+                    alert("عذراً، رصيدك الحالي من النجوم غير كافٍ لإتمام عملية الشراء.");
+                }
+            } else if (type === 'SELL') {
+                if (portfolio[activeAsset] >= 1) {
+                    userStars += pricePerUnit;
+                    portfolio[activeAsset] -= 1;
+                    todayProfit += Math.floor(pricePerUnit * 0.1); // محاكاة أرباح مستقطعة
+                    if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('success');
+                } else {
+                    alert("لا توجد لديك وحدات كافية من هذه العملة لبيعها.");
+                }
+            }
+
+            // تحديث الرصيد الإجمالي في جميع اللوحات
+            document.getElementById('global-stars').innerText = `${userStars.toLocaleString()} ⭐`;
+            document.getElementById('global-profit').innerText = `+${todayProfit.toLocaleString()} ⭐`;
+            document.getElementById('user-rank-profit').innerText = `+${todayProfit.toLocaleString()} ⭐`;
+            
+            updateCurrentUIValues();
+        }
+
+        // نظام التنقل بين الواجهات (Tabs Navigation)
+        function navigateTo(pageId) {
+            // إخفاء كل الواجهات وإلغاء تنشيط أزرار التحكم السفلية
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+
+            // إظهار الواجهة المطلوبة وتفعيل زرها المناسب
+            document.getElementById(`page-${pageId}`).classList.add('active');
+            document.getElementById(`nav-${pageId}`).classList.add('active');
+
+            // تحديث البيانات فور الانتقال للتأكد من المزامنة
+            updateCurrentUIValues();
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+        }
+    </script>
+</body>
+</html>
